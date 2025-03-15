@@ -1,0 +1,16 @@
+# Task specification
+task: detect # Options: detect, segment, classify, pose
+
+train: d:\Github\Satellite-Inferno-Detector\train\images
+val: d:\Github\Satellite-Inferno-Detector\valid\images
+test: d:\Github\Satellite-Inferno-Detector\test\images
+
+nc: 1
+names: ["Fire"]
+
+roboflow:
+  workspace: firesatelliteimages
+  project: satellite-inferno-detector
+  version: 5
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/firesatelliteimages/satellite-inferno-detector/dataset/5
