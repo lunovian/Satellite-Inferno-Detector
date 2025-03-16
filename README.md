@@ -1,6 +1,6 @@
 # Satellite Inferno Detector
 
-A project for detecting wildfires and infernos from satellite imagery using YOLO-based object detection models.
+A deep learning project for detecting wildfires and infernos from satellite imagery using YOLO-based object detection models.
 
 ## Overview
 
@@ -8,16 +8,11 @@ The Satellite Inferno Detector is designed to identify and locate fires in satel
 
 1. Training YOLO models on satellite wildfire detection datasets
 2. Uploading and downloading datasets to/from Hugging Face
-3. Preprocessing datasets for optimal model training
+3. Applying specialized data augmentation techniques for satellite imagery
 
 ## Installation
 
 ### Requirements
-
-- Python 3.7+
-- PyTorch
-- Ultralytics YOLO
-- Hugging Face libraries
 
 ```bash
 # Clone the repository
@@ -28,11 +23,24 @@ cd Satellite-Inferno-Detector
 pip install -r requirements.txt
 ```
 
+### Dependencies
+
+- Python 3.7+
+- PyTorch
+- Ultralytics YOLO
+- Hugging Face libraries (huggingface_hub, datasets)
+- Albumentations (for data augmentation)
+- OpenCV
+- PyYAML
+- tqdm
+
 ## Dataset Management
 
-The repository includes tools for managing datasets via Hugging Face. The `upload_and_unpack.py` script provides functionality for:
+### Uploading Datasets to Hugging Face
 
-### Uploading Datasets
+The repository includes tools for uploading datasets to Hugging Face to facilitate model training and dataset sharing.
+
+#### Standard Upload
 
 Upload a full dataset (train, valid, test folders and data.yaml) to Hugging Face:
 
@@ -40,7 +48,9 @@ Upload a full dataset (train, valid, test folders and data.yaml) to Hugging Face
 python upload_and_unpack.py upload --local_dir /path/to/dataset --dataset_name username/dataset-name --token YOUR_HF_TOKEN
 ```
 
-Upload a zipped dataset (more efficient):
+#### Zip Upload (More Efficient)
+
+Upload a zipped dataset:
 
 ```bash
 # Upload an existing zip file
@@ -50,7 +60,9 @@ python upload_and_unpack.py upload_zip --zip_path /path/to/dataset.zip --dataset
 python upload_and_unpack.py upload_zip --local_dir /path/to/dataset --dataset_name username/dataset-name --token YOUR_HF_TOKEN
 ```
 
-### Downloading Datasets
+### Downloading Datasets from Hugging Face
+
+#### Standard Download
 
 Download a dataset from Hugging Face:
 
@@ -58,18 +70,87 @@ Download a dataset from Hugging Face:
 python upload_and_unpack.py download --dataset_name username/dataset-name --local_dir /path/to/save --token YOUR_HF_TOKEN
 ```
 
-Download a zip file:
+#### Zip Download
+
+Download a zip file and optionally extract it:
 
 ```bash
 python upload_and_unpack.py download_zip --dataset_name username/dataset-name --zip_path dataset.zip --local_dir /path/to/save --extract --token YOUR_HF_TOKEN
+```
+
+## Data Augmentation
+
+The project includes a specialized data augmentation module for satellite imagery with wildfire-specific transformations.
+
+### How Augmentation Works
+
+The project includes specialized data augmentation for satellite imagery with wildfire detection:
+
+1. **Automatic Augmentation**: By default, the training script will attempt to import the augmentation module, but will proceed with training even if augmentation is unavailable.
+
+2. **Explicit Augmentation**: To explicitly enable augmentation with customized parameters, use the `--augment` flag:
+
+```bash
+python train.py --model v8 --size m --augment --aug-factor 3
+```
+
+3. **Augmentation Only Runs When Explicitly Enabled**: The training script will only perform dataset augmentation when the `--augment` flag is provided. Without this flag, training will proceed with the original dataset.
+
+4. **Troubleshooting Augmentation Warnings**: If you see warnings like:
+   ```
+   Warning: Could not import augmentation module. Augmentation will be disabled.
+   ```
+   This means:
+   - Either the albumentations package is not installed
+   - Or there was an error importing the augmentation module
+   
+   To fix this, ensure you've installed all required dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Augmentation Transformations
+
+The augmentation pipeline includes:
+
+- Geometric transformations (flips, rotations, scaling)
+- Color adjustments (brightness, contrast, hue, saturation)
+- Weather simulations (fog, shadows)
+- Blur effects (Gaussian blur, median blur)
+- Fire-specific adjustments (color jitter)
+
+### Using the Augmentation Module
+
+The augmentation module is automatically used during training when the `--augment` flag is provided.
+
+You can also use it directly to create an augmented dataset:
+
+```python
+from augmentation import create_augmented_dataset
+
+# Create an augmented dataset
+create_augmented_dataset(
+    source_dir="/path/to/original/dataset",
+    output_dir="/path/to/augmented/output",
+    augmentation_factor=3,  # Generate 3 augmented versions per original image
+    input_size=640  # Target image size
+)
 ```
 
 ## Training Models
 
 The project uses YOLO models from the Ultralytics framework for training fire detection models.
 
+### Basic Training Command
+
 ```bash
 python train.py --model v8 --size m --epochs 300 --batch 16 --imgsz 640
+```
+
+### Training with Data Augmentation
+
+```bash
+python train.py --model v8 --size m --epochs 300 --batch 16 --imgsz 640 --augment --aug-factor 3
 ```
 
 ### Training Parameters
@@ -81,17 +162,6 @@ python train.py --model v8 --size m --epochs 300 --batch 16 --imgsz 640
 - `--imgsz`: Image size for training
 - `--workers`: Number of workers for data loading
 - `--device`: Device to use (empty for auto)
-
-### Data Augmentation
-
-Enable satellite-specific data augmentation:
-
-```bash
-python train.py --model v8 --size m --augment --aug-factor 3
-```
-
-Augmentation parameters:
-
 - `--augment`: Enable augmentation
 - `--aug-factor`: Augmentation factor (samples per image)
 - `--aug-dir`: Directory for augmented data (default: runs/augmented)
@@ -118,7 +188,7 @@ The `data.yaml` file should contain:
 
 ```yaml
 train: train/images
-val: valid/images
+val: valid/images  # or 'valid: valid/images'
 test: test/images
 
 nc: 1  # Number of classes
@@ -131,4 +201,9 @@ After training, models are automatically exported to ONNX format and saved in th
 
 ## License
 
-[Insert your license information here]
+
+## Acknowledgements
+
+- [Ultralytics YOLO](https://github.com/ultralytics/ultralytics)
+- [Hugging Face](https://huggingface.co/)
+- [Albumentations](https://albumentations.ai/)

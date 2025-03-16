@@ -46,14 +46,18 @@ except ImportError:
 # Ensure the augmentation module is available
 try:
     from augmentation import create_augmented_dataset
+
+    AUGMENTATION_AVAILABLE = True
 except ImportError:
     print(
         "Warning: Could not import augmentation module. Augmentation will be disabled."
     )
+    AUGMENTATION_AVAILABLE = False
 
     # Create a dummy function as a fallback
     def create_augmented_dataset(*args, **kwargs):
         print("Augmentation module not available. Skipping augmentation.")
+        return None
 
 
 def parse_arguments():
@@ -289,64 +293,77 @@ def train_yolo(args):
     # Handle data augmentation if requested
     data_yaml = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.yaml")
 
+    # Only run augmentation when explicitly enabled with --augment flag
     if args.augment:
-        print_section("Data Augmentation")
-        print_info("Running satellite-specific data augmentation...")
-
-        # Ensure we use absolute path for augmentation directory
-        if args.aug_dir:
-            aug_dir = os.path.abspath(args.aug_dir)
+        if not AUGMENTATION_AVAILABLE:
+            print_warning(
+                "Augmentation was requested but is not available. Will proceed with original dataset."
+            )
+            print_warning(
+                "Install required packages with: pip install albumentations opencv-python"
+            )
         else:
-            aug_dir = os.path.abspath(os.path.join("runs", "augmented"))
+            print_section("Data Augmentation")
+            print_info("Running satellite-specific data augmentation...")
 
-        os.makedirs(aug_dir, exist_ok=True)
-        print_info(f"Augmentation directory: {aug_dir}")
-
-        # Get source dataset directory from data.yaml
-        try:
-            with open(data_yaml, "r") as f:
-                try:
-                    data_config = yaml.safe_load(f)
-                    if data_config is None:
-                        print_warning("Empty or invalid YAML file")
-                        data_config = {}
-                except Exception as e:
-                    print_error(f"Error parsing YAML: {e}")
-                    data_config = {}
-
-            # Get the source directory, with fallback to current directory
-            source_dir = os.path.dirname(os.path.abspath(__file__))
-            print_info(f"Source dataset directory: {source_dir}")
-
-            # Create augmented dataset and save to disk
-            create_augmented_dataset(
-                source_dir=source_dir,
-                output_dir=aug_dir,
-                augmentation_factor=args.aug_factor,
-                input_size=args.imgsz,
-            )
-
-            # Use augmented data.yaml
-            data_yaml = os.path.join(aug_dir, "data.yaml")
-
-            # Verify the augmented data.yaml file
-            if os.path.exists(data_yaml):
-                with open(data_yaml, "r") as f:
-                    aug_config = yaml.safe_load(f)
-                    print_info(f"Augmented train path: {aug_config.get('train')}")
-                    print_info(f"Augmented val path: {aug_config.get('val')}")
-
-                print_success(f"Using augmented dataset config: {data_yaml}")
+            # Ensure we use absolute path for augmentation directory
+            if args.aug_dir:
+                aug_dir = os.path.abspath(args.aug_dir)
             else:
-                print_error(f"Augmented data.yaml not found at {data_yaml}")
-                raise FileNotFoundError(f"Augmented data.yaml not found at {data_yaml}")
+                aug_dir = os.path.abspath(os.path.join("runs", "augmented"))
 
-        except Exception as e:
-            print_error(f"Error during augmentation setup: {e}")
-            print_warning("Proceeding with original dataset")
-            data_yaml = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "data.yaml"
-            )
+            os.makedirs(aug_dir, exist_ok=True)
+            print_info(f"Augmentation directory: {aug_dir}")
+
+            # Get source dataset directory from data.yaml
+            try:
+                with open(data_yaml, "r") as f:
+                    try:
+                        data_config = yaml.safe_load(f)
+                        if data_config is None:
+                            print_warning("Empty or invalid YAML file")
+                            data_config = {}
+                    except Exception as e:
+                        print_error(f"Error parsing YAML: {e}")
+                        data_config = {}
+
+                # Get the source directory, with fallback to current directory
+                source_dir = os.path.dirname(os.path.abspath(__file__))
+                print_info(f"Source dataset directory: {source_dir}")
+
+                # Create augmented dataset and save to disk
+                create_augmented_dataset(
+                    source_dir=source_dir,
+                    output_dir=aug_dir,
+                    augmentation_factor=args.aug_factor,
+                    input_size=args.imgsz,
+                )
+
+                # Use augmented data.yaml
+                data_yaml = os.path.join(aug_dir, "data.yaml")
+
+                # Verify the augmented data.yaml file
+                if os.path.exists(data_yaml):
+                    with open(data_yaml, "r") as f:
+                        aug_config = yaml.safe_load(f)
+                        print_info(f"Augmented train path: {aug_config.get('train')}")
+                        print_info(f"Augmented val path: {aug_config.get('val')}")
+
+                    print_success(f"Using augmented dataset config: {data_yaml}")
+                else:
+                    print_error(f"Augmented data.yaml not found at {data_yaml}")
+                    raise FileNotFoundError(
+                        f"Augmented data.yaml not found at {data_yaml}"
+                    )
+
+            except Exception as e:
+                print_error(f"Error during augmentation setup: {e}")
+                print_warning("Proceeding with original dataset")
+                data_yaml = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)), "data.yaml"
+                )
+    else:
+        print_info("Augmentation not requested. Using original dataset.")
 
     # Preprocessing step - handle all labels before training
     preprocess_dataset()
