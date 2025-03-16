@@ -6,4 +6,4 @@
 *.zip
 *.txt
 .env
-
+.pyc
