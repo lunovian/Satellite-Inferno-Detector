@@ -84,7 +84,7 @@ def parse_arguments():
 
     # Additional training parameters
     parser.add_argument(
-        "--epochs", type=int, default=300, help="Number of training epochs"
+        "--epochs", type=int, default=100, help="Number of training epochs"
     )
     parser.add_argument("--batch", type=int, default=16, help="Batch size")
     parser.add_argument("--imgsz", type=int, default=640, help="Image size")
