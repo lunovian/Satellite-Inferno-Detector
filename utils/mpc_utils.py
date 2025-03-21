@@ -193,6 +193,27 @@ def init_planetary_computer(retry_attempts: int = 3) -> Optional[pystac_client.C
             return None
 
 
+def validate_bbox(bbox: list) -> list:
+    """
+    Clamp the bounding box values within the allowed global bounds:
+    [-180, -90, 180, 90].
+
+    Args:
+        bbox (list): [min_lon, min_lat, max_lon, max_lat]
+
+    Returns:
+        list: Clamped bounding box.
+    """
+    min_lon, min_lat, max_lon, max_lat = bbox
+
+    min_lon = max(-180, min(min_lon, 180))
+    max_lon = max(-180, min(max_lon, 180))
+    min_lat = max(-90, min(min_lat, 90))
+    max_lat = max(-90, min(max_lat, 90))
+
+    return [min_lon, min_lat, max_lon, max_lat]
+
+
 def validate_search_params(
     lat: float, lon: float, date_start: str, date_end: str, collection: str
 ) -> Tuple[bool, str]:
@@ -252,13 +273,11 @@ def search_satellite_imagery(
             lon + search_radius,
             lat + search_radius,
         ]
+        bbox = validate_bbox(bbox)
 
-        # Configure query based on collection
         cloud_cover_property = (
             "eo:cloud_cover" if "sentinel" in collection else "landsat:cloud_cover"
         )
-
-        # Search parameters with sorting
         search = catalog.search(
             collections=[collection],
             bbox=bbox,
@@ -267,9 +286,8 @@ def search_satellite_imagery(
             sortby=[{"field": "datetime", "direction": "desc"}],
         )
 
-        # Get items with progress indicator using non-deprecated items() method
         with st.spinner("Fetching satellite imagery..."):
-            items = list(search.items())  # Changed from get_items() to items()
+            items = list(search.items())
 
         if not items:
             st.info("No images found matching your criteria")
