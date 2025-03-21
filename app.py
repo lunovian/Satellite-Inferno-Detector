@@ -15,29 +15,58 @@ import uuid
 import logging as logger
 from typing import Optional, List, Dict, Tuple, Union, Any, Callable
 
+# Add utils to path to ensure imports work correctly
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 # After existing imports, add:
-from utils.mpc_utils import (
-    init_planetary_computer,
-    search_satellite_imagery,
-    process_satellite_image,
-    get_available_collections,
-    create_preview_image,  # Add this import
-)
+try:
+    from utils.mpc_utils import (
+        init_planetary_computer,
+        search_satellite_imagery,
+        process_satellite_image,
+        get_available_collections,
+        create_preview_image,
+    )
+    from utils.image_utils import create_tiled_image, TiledImage, should_tile_image
+    from utils.csv_utils import (
+        validate_wildfire_data,
+        parse_date_column,
+        get_common_date_formats,
+        validate_satellite_dates,
+        detect_numeric_columns,
+        detect_columns,
+        validate_column_selection,
+    )
+except ImportError as e:
+    st.error(f"Import error: {e}")
+    st.info("Attempting local imports...")
+    # Try relative imports as fallback
+    try:
+        import mpc_utils
+        import image_utils
+        import csv_utils
+
+        # Reassign functions to maintain compatibility
+        init_planetary_computer = mpc_utils.init_planetary_computer
+        search_satellite_imagery = mpc_utils.search_satellite_imagery
+        process_satellite_image = mpc_utils.process_satellite_image
+        get_available_collections = mpc_utils.get_available_collections
+        create_preview_image = mpc_utils.create_preview_image
+        create_tiled_image = image_utils.create_tiled_image
+        TiledImage = image_utils.TiledImage
+        should_tile_image = image_utils.should_tile_image
+        validate_wildfire_data = csv_utils.validate_wildfire_data
+        parse_date_column = csv_utils.parse_date_column
+        get_common_date_formats = csv_utils.get_common_date_formats
+        validate_satellite_dates = csv_utils.validate_satellite_dates
+        detect_numeric_columns = csv_utils.detect_numeric_columns
+        detect_columns = csv_utils.detect_columns
+        validate_column_selection = csv_utils.validate_column_selection
+    except ImportError as e2:
+        st.error(f"Failed to import utility modules: {e2}")
+        st.warning("Application may not function correctly due to missing modules")
+
 from datetime import datetime, timedelta
-
-# Add to imports
-from utils.csv_utils import (
-    validate_wildfire_data,
-    parse_date_column,
-    get_common_date_formats,
-    validate_satellite_dates,
-    detect_numeric_columns,  # Add this import
-    detect_columns,
-    validate_column_selection,
-)
-
-# Add import for image tiling utilities
-from utils.image_utils import create_tiled_image, TiledImage, should_tile_image
 
 # Set page config - MUST BE THE FIRST STREAMLIT COMMAND
 st.set_page_config(
