@@ -14,7 +14,6 @@ import traceback
 import uuid
 import logging as logger
 from typing import Optional, List, Dict, Tuple, Union, Any, Callable
-
 from utils.csv_utils import (
     detect_columns,
     detect_numeric_columns,
@@ -24,7 +23,7 @@ from utils.csv_utils import (
     validate_satellite_dates,
     validate_wildfire_data,
 )
-from utils.image_utils import create_tiled_image, should_tile_image
+from utils.image_utils import create_tiled_image, merge_tile_results, should_tile_image
 from utils.mpc_utils import (
     create_preview_image,
     get_available_collections,
@@ -32,12 +31,6 @@ from utils.mpc_utils import (
     process_satellite_image,
     search_satellite_imagery,
 )
-
-# Better module import handling for cloud deployment
-# Fix path issues for both local and cloud environments
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
 
 
 # Create a more reliable import mechanism
@@ -146,19 +139,6 @@ except Exception as e:
         "If you're seeing an error related to torch._classes, you might need to restart the application."
     )
     traceback.print_exc()
-
-
-# Load custom CSS
-def load_css():
-    with open("app.css", "r") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-
-# Try to load CSS, but continue if file not found
-try:
-    load_css()
-except FileNotFoundError:
-    st.warning("Custom CSS file not found. Using default styling.")
 
 # Application directories
 UPLOAD_FOLDER = "uploads"
@@ -332,6 +312,11 @@ def render_mpc_section():
         value=20,
     )
 
+    # Add input for expanding AOI
+    expand_aoi_km = st.number_input(
+        "Expand AOI (km)", value=5.0, min_value=0.0, max_value=50.0, step=0.5
+    )
+
     # Search button
     if st.button("Search Satellite Imagery"):
         with st.spinner("Searching for imagery..."):
@@ -343,6 +328,7 @@ def render_mpc_section():
                 date_start.isoformat(),  # Use same date for end
                 collection=selected_collection,
                 max_cloud_cover=max_cloud_cover,
+                expand_aoi_km=expand_aoi_km,  # Pass the expanded AOI parameter
             )
 
             if not items:
@@ -567,6 +553,10 @@ def render_csv_import_section():
                 row_limit = get_valid_limit_value(row_limit_custom, available_rows)
                 working_df = filtered_df.head(row_limit)
 
+                # Show warning for large selections
+                if row_limit > 500:
+                    st.warning(f"⚠️ Processing {row_limit:,} records may take a while")
+
             # Show selection summary with percentage
             if row_limit < available_rows:
                 percentage = (row_limit / available_rows) * 100
@@ -599,7 +589,7 @@ def render_csv_import_section():
                     "Latitude Column",
                     working_df.columns,
                     index=working_df.columns.get_loc(suggested_columns["latitude"])
-                    if suggested_columns["latitude"]
+                    if (suggested_columns["latitude"])
                     else 0,
                     help="Column containing latitude values (-90 to 90)",
                 )
@@ -607,7 +597,7 @@ def render_csv_import_section():
                     "Longitude Column",
                     working_df.columns,
                     index=working_df.columns.get_loc(suggested_columns["longitude"])
-                    if suggested_columns["longitude"]
+                    if (suggested_columns["longitude"])
                     else 0,
                     help="Column containing longitude values (-180 to 180)",
                 )
@@ -615,7 +605,7 @@ def render_csv_import_section():
                     "Date Column",
                     working_df.columns,
                     index=working_df.columns.get_loc(suggested_columns["date"])
-                    if suggested_columns["date"]
+                    if (suggested_columns["date"])
                     else 0,
                     help="Column containing dates",
                 )
@@ -625,7 +615,7 @@ def render_csv_import_section():
                     "Time Column (optional)",
                     ["None"] + list(working_df.columns),
                     index=working_df.columns.get_loc(suggested_columns["time"]) + 1
-                    if suggested_columns["time"]
+                    if (suggested_columns["time"])
                     else 0,
                     help="Optional column containing time information",
                 )
@@ -645,7 +635,7 @@ def render_csv_import_section():
                     "latitude": lat_col,
                     "longitude": lon_col,
                     "date": date_col,
-                    "time": None if time_col == "None" else time_col,
+                    "time": None if (time_col == "None") else time_col,
                 },
             )
 
@@ -662,8 +652,8 @@ def render_csv_import_section():
                     preview_dates = parse_date_column(
                         working_df.head(),
                         date_col,
-                        None if time_col == "None" else time_col,
-                        format_key if format_key != "auto" else None,
+                        None if (time_col == "None") else time_col,
+                        format_key if (format_key != "auto") else None,
                     )
                 except ValueError as e:
                     date_parse_error = str(e)
@@ -692,7 +682,7 @@ def render_csv_import_section():
                 "latitude": lat_col,
                 "longitude": lon_col,
                 "date": date_col,
-                "time": None if time_col == "None" else time_col,
+                "time": None if (time_col == "None") else time_col,
             }
 
             # Process button with cancel option
@@ -901,7 +891,7 @@ def render_csv_import_section():
                                                 for p in detection_result["predictions"]
                                             )
                                             / len(detection_result["predictions"])
-                                            if detection_result["predictions"]
+                                            if (detection_result["predictions"])
                                             else 0,
                                             "model_predictions": detection_result[
                                                 "predictions"
@@ -984,7 +974,7 @@ def render_csv_import_section():
                             fire_results.append(
                                 {
                                     "status": "error",
-                                    "location": f"Unknown location",
+                                    "location": "Unknown location",
                                     "error": str(e),
                                 }
                             )
@@ -1174,7 +1164,7 @@ def main():
         # Format version display
         versionLabel = (
             f"YOLO{version.upper()}"
-            if version in ["v5", "v8", "v9", "v10", "v11", "v12"]
+            if (version in ["v5", "v8", "v9", "v10", "v11", "v12"])
             else version.upper()
         )
 
@@ -1329,13 +1319,115 @@ def main():
             elif not st.session_state.uploaded_images:
                 st.error("Please upload at least one image")
             else:
-                # Create model paths from session state
-                selected_models = st.session_state.selected_models
-                models_to_use = [
-                    os.path.join(MODELS_DIR, model) for model in selected_models
-                ]
+                try:
+                    # Initialize progress tracking
+                    progress_text = st.empty()
+                    progress_bar = st.progress(0)
 
-                # ...rest of existing detection code...
+                    # Initialize YOLO ensemble
+                    with st.spinner("Initializing detection models..."):
+                        ensemble = ensure_yolo_ensemble()
+                        if not ensemble:
+                            st.error("Failed to initialize detection models")
+                            return
+
+                        # Update ensemble parameters from sidebar
+                        ensemble.conf_thres = conf_threshold
+                        ensemble.iou_thres = iou_threshold
+
+                    # Prepare for detection
+                    total_images = len(st.session_state.uploaded_images)
+                    processed_results = []
+
+                    # Create model paths
+                    models_to_use = [
+                        os.path.join(MODELS_DIR, model)
+                        for model in st.session_state.selected_models
+                    ]
+
+                    # Process each image
+                    for idx, (image_path, image_name) in enumerate(
+                        st.session_state.uploaded_images
+                    ):
+                        progress_text.text(
+                            f"Processing image {idx + 1}/{total_images}: {image_name}"
+                        )
+
+                        try:
+                            # Check if image is tiled
+                            if image_path in st.session_state.tiled_images:
+                                # Process tiled image
+                                tiled_image = st.session_state.tiled_images[image_path]
+                                tile_results = []
+
+                                # Process each tile
+                                for tile_idx, tile_path in enumerate(tiled_image.tiles):
+                                    tile_progress = (
+                                        idx * len(tiled_image.tiles) + tile_idx + 1
+                                    ) / (total_images * len(tiled_image.tiles))
+                                    progress_bar.progress(tile_progress)
+
+                                    result = process_image(
+                                        tile_path, ensemble, models_to_use
+                                    )
+                                    if "error" not in result:
+                                        tile_results.append(result)
+
+                                # Merge tile results
+                                merged_result = merge_tile_results(
+                                    tiled_image, tile_results
+                                )
+                                if merged_result:
+                                    merged_result["filename"] = image_name
+                                    processed_results.append(merged_result)
+                            else:
+                                # Process regular image
+                                result = process_image(
+                                    image_path, ensemble, models_to_use
+                                )
+                                if "error" not in result:
+                                    result["filename"] = image_name
+                                    processed_results.append(result)
+                                else:
+                                    st.error(
+                                        f"Error processing {image_name}: {result['error']}"
+                                    )
+
+                            # Update progress
+                            progress = (idx + 1) / total_images
+                            progress_bar.progress(progress)
+
+                        except Exception as e:
+                            st.error(f"Error processing {image_name}: {str(e)}")
+                            logger.error(f"Processing error for {image_name}: {e}")
+                            traceback.print_exc()
+                            continue
+
+                    # Clear progress indicators
+                    progress_text.empty()
+                    progress_bar.empty()
+
+                    # Store results in session state
+                    st.session_state.processed_images = processed_results
+                    st.session_state.results = {
+                        "total_images": total_images,
+                        "processed": len(processed_results),
+                        "models_used": st.session_state.selected_models,
+                    }
+
+                    # Show summary
+                    if processed_results:
+                        st.success(
+                            f"Successfully processed {len(processed_results)} images"
+                        )
+                        st.rerun()  # Changed from st.experimental_rerun() to st.rerun()
+                    else:
+                        st.warning("No successful detections to display")
+
+                except Exception as e:
+                    st.error(f"Detection process failed: {str(e)}")
+                    logger.error(f"Detection process error: {e}")
+                    traceback.print_exc()
 
     with tab2:
         render_mpc_section()

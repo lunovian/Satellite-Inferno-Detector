@@ -459,3 +459,129 @@ def validate_column_selection(
         return False, f"Error validating date column: {str(e)}"
 
     return True, "Column validation successful"
+
+
+import pandas as pd
+import numpy as np
+from typing import Dict, List, Optional, Any
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def is_numeric_column(series: pd.Series) -> bool:
+    """Check if a series contains numeric values"""
+    try:
+        # Try to convert to numeric, coerce errors to NaN
+        numeric_series = pd.to_numeric(series, errors="coerce")
+        # Column is considered numeric if at least 80% of values are valid numbers
+        return numeric_series.notna().mean() >= 0.8
+    except:
+        return False
+
+
+def validate_numeric_range(series: pd.Series, min_val: float, max_val: float) -> bool:
+    """Validate that numeric values fall within specified range"""
+    try:
+        # Convert to numeric, coerce errors to NaN
+        numeric_series = pd.to_numeric(series, errors="coerce")
+        # Only check values that could be converted to numbers
+        valid_values = numeric_series.dropna()
+        if len(valid_values) == 0:
+            return False
+        return valid_values.between(min_val, max_val).all()
+    except:
+        return False
+
+
+def detect_columns(df: pd.DataFrame) -> Dict[str, str]:
+    """
+    Detect columns containing latitude, longitude, date, and time information
+    with improved type checking and validation
+    """
+    # Column detection patterns with safe validation
+    patterns = {
+        "latitude": {
+            "keywords": ["lat", "latitude", "koordinat_y", "y_coord"],
+            "validation": lambda x: validate_numeric_range(x, -90, 90),
+        },
+        "longitude": {
+            "keywords": ["lon", "long", "longitude", "koordinat_x", "x_coord"],
+            "validation": lambda x: validate_numeric_range(x, -180, 180),
+        },
+        "date": {
+            "keywords": ["date", "datum", "acquisition_date", "acq_date", "datetime"],
+            "validation": lambda x: isinstance(x.iloc[0], (str, pd.Timestamp))
+            if not x.empty
+            else False,
+        },
+        "time": {
+            "keywords": ["time", "zeit", "acquisition_time", "acq_time"],
+            "validation": lambda x: isinstance(x.iloc[0], (str, pd.Timestamp))
+            if not x.empty
+            else False,
+        },
+    }
+
+    detected = {"latitude": None, "longitude": None, "date": None, "time": None}
+
+    # Helper function to normalize column names
+    def normalize_name(name: str) -> str:
+        return str(name).lower().strip()
+
+    # First pass: Check exact matches with type validation
+    for col in df.columns:
+        col_lower = normalize_name(col)
+
+        # Skip already detected types
+        detected_values = list(detected.values())
+        if col in detected_values:
+            continue
+
+        # Check each pattern
+        for col_type, pattern in patterns.items():
+            if detected[col_type]:
+                continue
+
+            # Check for exact keyword matches first
+            if any(keyword == col_lower for keyword in pattern["keywords"]):
+                if pattern["validation"](df[col]):
+                    detected[col_type] = col
+                    break
+
+    # Second pass: Check partial matches if needed
+    for col in df.columns:
+        col_lower = normalize_name(col)
+
+        # Skip already detected types
+        if col in detected.values():
+            continue
+
+        # Check each undetected pattern
+        for col_type, pattern in patterns.items():
+            if detected[col_type]:
+                continue
+
+            # Check for partial keyword matches
+            if any(keyword in col_lower for keyword in pattern["keywords"]):
+                if pattern["validation"](df[col]):
+                    detected[col_type] = col
+                    break
+
+    # Final pass: Try to infer from data content for undetected columns
+    if not all(detected.values()):
+        for col in df.columns:
+            if col in detected.values():
+                continue
+
+            # Try to detect by content
+            for col_type, pattern in patterns.items():
+                if detected[col_type]:
+                    continue
+
+                if pattern["validation"](df[col]):
+                    detected[col_type] = col
+                    logger.info(f"Inferred {col_type} from content of column: {col}")
+                    break
+
+    return detected

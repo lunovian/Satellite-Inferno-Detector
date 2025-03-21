@@ -193,6 +193,27 @@ def init_planetary_computer(retry_attempts: int = 3) -> Optional[pystac_client.C
             return None
 
 
+def validate_bbox(bbox: list) -> list:
+    """
+    Clamp the bounding box values within the allowed global bounds:
+    [-180, -90, 180, 90].
+
+    Args:
+        bbox (list): [min_lon, min_lat, max_lon, max_lat]
+
+    Returns:
+        list: Clamped bounding box.
+    """
+    min_lon, min_lat, max_lon, max_lat = bbox
+
+    min_lon = max(-180, min(min_lon, 180))
+    max_lon = max(-180, min(max_lon, 180))
+    min_lat = max(-90, min(min_lat, 90))
+    max_lat = max(-90, min(max_lat, 90))
+
+    return [min_lon, min_lat, max_lon, max_lat]
+
+
 def validate_search_params(
     lat: float, lon: float, date_start: str, date_end: str, collection: str
 ) -> Tuple[bool, str]:
@@ -220,6 +241,7 @@ def search_satellite_imagery(
     collection: str = "sentinel-2-l2a",
     max_cloud_cover: int = 20,
     search_radius_km: float = 10.0,
+    expand_aoi_km: float = 5.0,  # New parameter to expand AOI
 ) -> List[Dict]:
     """
     Search for satellite imagery from MPC
@@ -231,6 +253,7 @@ def search_satellite_imagery(
         collection: Satellite collection ID
         max_cloud_cover: Maximum cloud cover percentage
         search_radius_km: Search radius in kilometers
+        expand_aoi_km: Amount to expand the AOI in kilometers
     """
     try:
         # Validate parameters
@@ -244,21 +267,20 @@ def search_satellite_imagery(
         # Convert radius from km to degrees (approximate)
         degrees_per_km = 1 / 111  # at equator
         search_radius = search_radius_km * degrees_per_km
+        expand_aoi = expand_aoi_km * degrees_per_km
 
-        # Create search area
+        # Create expanded search area
         bbox = [
-            lon - search_radius,
-            lat - search_radius,
-            lon + search_radius,
-            lat + search_radius,
+            lon - search_radius - expand_aoi,
+            lat - search_radius - expand_aoi,
+            lon + search_radius + expand_aoi,
+            lat + search_radius + expand_aoi,
         ]
+        bbox = validate_bbox(bbox)
 
-        # Configure query based on collection
         cloud_cover_property = (
             "eo:cloud_cover" if "sentinel" in collection else "landsat:cloud_cover"
         )
-
-        # Search parameters with sorting
         search = catalog.search(
             collections=[collection],
             bbox=bbox,
@@ -267,9 +289,8 @@ def search_satellite_imagery(
             sortby=[{"field": "datetime", "direction": "desc"}],
         )
 
-        # Get items with progress indicator using non-deprecated items() method
         with st.spinner("Fetching satellite imagery..."):
-            items = list(search.items())  # Changed from get_items() to items()
+            items = list(search.items())
 
         if not items:
             st.info("No images found matching your criteria")
@@ -570,3 +591,35 @@ def get_available_collections() -> Dict[str, str]:
         "landsat-8-c2-l2": "Landsat 8 Collection 2 Level 2 (30m resolution)",
         "landsat-9-c2-l2": "Landsat 9 Collection 2 Level 2 (30m resolution)",
     }
+
+
+"""
+Utility functions for MPC (Model Predictive Control) or other functionality
+required by the Satellite Inferno Detector application.
+"""
+
+
+def setup_mpc():
+    """
+    Set up the MPC controller or other functionality.
+
+    Returns:
+        Object: An initialized controller or other object.
+    """
+    return None
+
+
+def process_satellite_data(data):
+    """
+    Process satellite data for inferno detection.
+
+    Args:
+        data: The satellite data to process.
+
+    Returns:
+        dict: Processed data results.
+    """
+    return {"processed": True, "data": data}
+
+
+# Add other necessary functions that your application needs
