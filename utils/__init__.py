@@ -1,2 +1,1 @@
-# Utils package initialization
-# This file makes the utils directory a Python package
+# Empty file to make utils a proper package
