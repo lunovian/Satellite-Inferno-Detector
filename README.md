@@ -1,6 +1,55 @@
 # Satellite Inferno Detector
 
-A deep learning project for detecting wildfires and infernos from satellite imagery using YOLO-based object detection models.
+A Streamlit application for wildfire detection in satellite and drone imagery using YOLO ensemble learning.
+
+## Features
+
+- Upload and analyze satellite/drone images
+- Use multiple YOLO models in an ensemble for better detection results
+- Interactive UI with model selection and parameter tuning
+- Detailed visualization of detection results
+
+## Installation
+
+1. Clone this repository:
+```bash
+git clone https://github.com/your-username/Satellite-Inferno-Detector.git
+cd Satellite-Inferno-Detector
+```
+
+2. Install the required dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Place your YOLO model files (`.pt`) in the `models` directory.
+
+## Usage
+
+1. Start the Streamlit app:
+```bash
+streamlit run app.py
+```
+
+2. Open your browser at http://localhost:8501
+
+3. Use the interface to:
+   - Select models from the sidebar
+   - Adjust detection parameters
+   - Upload images
+   - Run detection
+   - View results
+
+## Model Compatibility
+
+- YOLOv9, YOLOv10, YOLOv11, and YOLOv12 models require Ultralytics 8.1.0+
+- YOLOv8 models work with most Ultralytics versions (8.0.0+ recommended)
+- YOLOv5 models are backward compatible with newer Ultralytics versions
+- See `model_compatibility.md` for detailed information
+
+## License
+
+Copyright © 2025 Satellite Inferno Detector
 
 ## Overview
 

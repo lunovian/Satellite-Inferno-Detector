@@ -1,0 +1,68 @@
+/* Custom CSS for Satellite Inferno Detector Streamlit app */
+
+/* Import Fira Code font */
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap');
+
+/* Apply Fira Code to all monospace text */
+code, pre {
+  font-family: 'Fira Code', monospace !important;
+}
+
+/* Styling for the image grid */
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.grid-item {
+  border: 1px solid rgba(49, 51, 63, 0.2);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background-color: rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s;
+}
+
+.grid-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.grid-item-header {
+  padding: 0.5rem;
+  border-bottom: 1px solid rgba(49, 51, 63, 0.2);
+  font-weight: 500;
+}
+
+.grid-item-content {
+  padding: 0.5rem;
+}
+
+/* Detection details table styling */
+.detection-table {
+  font-family: 'Fira Code', monospace !important;
+  font-size: 0.85rem;
+}
+
+/* Improve expander styling */
+.streamlit-expanderHeader {
+  font-family: 'Fira Code', monospace !important;
+  font-weight: 500 !important;
+}
+
+/* Style for the detection count badge */
+.detection-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: 0.25rem;
+  background-color: #ff4b4b;
+  color: white;
+  margin-left: 0.5rem;
+}

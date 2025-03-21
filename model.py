@@ -2,10 +2,16 @@ import os
 import cv2
 import numpy as np
 import torch
+import traceback
 from ultralytics import YOLO
 from PIL import Image, ImageDraw, ImageFont
 import glob
 import argparse
+
+
+# Add better error handling and debug messages
+def debug_log(message):
+    print(f"[DEBUG] {message}")
 
 
 class YOLOEnsemble:
@@ -19,18 +25,25 @@ class YOLOEnsemble:
 
         # Only load models from directory if a directory is specified
         if models_dir:
-            # Load all YOLO models from the models directory
-            model_files = glob.glob(os.path.join(models_dir, "*.pt"))
-            if not model_files:
-                raise ValueError(f"No model files found in {models_dir}")
+            try:
+                # Load all YOLO models from the models directory
+                model_files = glob.glob(os.path.join(models_dir, "*.pt"))
+                if not model_files:
+                    raise ValueError(f"No model files found in {models_dir}")
 
-            print(f"Loading {len(model_files)} YOLO models...")
-            for model_path in model_files:
-                model_name = os.path.basename(model_path)
-                print(f"Loading {model_name}...")
-                model = YOLO(model_path)
-                self.models.append(model)
-            print("All models loaded successfully!")
+                debug_log(f"Loading {len(model_files)} YOLO models...")
+                for model_path in model_files:
+                    model_name = os.path.basename(model_path)
+                    debug_log(f"Loading {model_name}...")
+                    model = YOLO(model_path)
+                    self.models.append(model)
+                debug_log("All models loaded successfully!")
+            except Exception as e:
+                print(f"Error loading models: {e}")
+                traceback.print_exc()
+                # Don't raise exception here, just return an empty model list
+                # This allows the application to initialize without models
+                # and then load them explicitly later
 
     def predict(self, image_path, output_path=None, visualize=True):
         """
@@ -90,37 +103,42 @@ class YOLOEnsemble:
         if not predictions:
             return []
 
-        # Group predictions by class
-        class_predictions = {}
-        for pred in predictions:
-            cls_id = pred["cls_id"]
-            if cls_id not in class_predictions:
-                class_predictions[cls_id] = []
-            class_predictions[cls_id].append(pred)
+        try:
+            # Group predictions by class
+            class_predictions = {}
+            for pred in predictions:
+                cls_id = pred["cls_id"]
+                if cls_id not in class_predictions:
+                    class_predictions[cls_id] = []
+                class_predictions[cls_id].append(pred)
 
-        # Apply NMS for each class
-        final_predictions = []
-        for cls_id, preds in class_predictions.items():
-            boxes = np.array([p["box"] for p in preds])
-            scores = np.array([p["conf"] for p in preds])
+            # Apply NMS for each class
+            final_predictions = []
+            for cls_id, preds in class_predictions.items():
+                boxes = np.array([p["box"] for p in preds])
+                scores = np.array([p["conf"] for p in preds])
 
-            # Get indices of boxes to keep after NMS
-            indices = cv2.dnn.NMSBoxes(
-                boxes.tolist(), scores.tolist(), self.conf_thres, self.iou_thres
-            )
+                # Get indices of boxes to keep after NMS
+                indices = cv2.dnn.NMSBoxes(
+                    boxes.tolist(), scores.tolist(), self.conf_thres, self.iou_thres
+                )
 
-            if len(indices) > 0:
-                # OpenCV may return indices as nested arrays
-                if isinstance(indices, tuple):
-                    indices = indices[0]
+                if len(indices) > 0:
+                    # OpenCV may return indices as nested arrays
+                    if isinstance(indices, tuple):
+                        indices = indices[0]
 
-                for i in indices:
-                    # For OpenCV 4.5.x and earlier
-                    if isinstance(i, (list, tuple, np.ndarray)):
-                        i = i[0]
-                    final_predictions.append(preds[i])
+                    for i in indices:
+                        # For OpenCV 4.5.x and earlier
+                        if isinstance(i, (list, tuple, np.ndarray)):
+                            i = i[0]
+                        final_predictions.append(preds[i])
 
-        return final_predictions
+            return final_predictions
+        except Exception as e:
+            print(f"Error in NMS: {e}")
+            traceback.print_exc()
+            return []
 
     def _draw_predictions(self, img, predictions):
         """

@@ -1,0 +1,18 @@
+[theme]
+primaryColor = "#ff4b4b"
+backgroundColor = "#121212"
+secondaryBackgroundColor = "#1e1e1e"
+textColor = "#e0e0e0"
+font = "Fira Code"
+
+[server]
+maxUploadSize = 200
+# We can either disable XSRF protection if we need CORS disabled
+# or enable CORS if we want to keep XSRF protection
+# Option 1: Keep XSRF protection (more secure) and enable CORS
+enableXsrfProtection = true
+enableCORS = true
+
+# Option 2 (commented out): Disable XSRF protection to allow CORS to be disabled
+# enableXsrfProtection = false
+# enableCORS = false
