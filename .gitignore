@@ -10,3 +10,5 @@
 /uploads
 *.pyc
 *.csv
+/images
+*.pyc
