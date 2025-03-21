@@ -66,3 +66,209 @@ code, pre {
   color: white;
   margin-left: 0.5rem;
 }
+
+/* Satellite Inferno Detector - Custom Styling */
+
+/* Main styling */
+.main .block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+/* Header styling */
+h1 {
+    color: #FF5733;
+    font-weight: 700 !important;
+}
+
+h2, h3 {
+    color: #FF7B54;
+    font-weight: 600 !important;
+    margin-top: 1.5rem !important;
+}
+
+/* Create a gradient background for the app */
+.stApp {
+    background: linear-gradient(to bottom, #FFF9E8, #fff);
+}
+
+/* Sidebar styling */
+.css-1d391kg {
+    background-color: #FFEFD7;
+}
+
+/* Button styling */
+.stButton > button {
+    background-color: #FF5733;
+    color: white;
+    border-radius: 5px;
+    border: none;
+    padding: 0.5rem 1rem;
+    transition: all 0.3s;
+}
+
+.stButton > button:hover {
+    background-color: #E64A19;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+.stButton > button:active {
+    transform: translateY(0);
+}
+
+/* File uploader styling */
+.uploadedFileData {
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 0.5rem;
+    background-color: #f8f8f8;
+}
+
+/* Progress bar customization */
+.stProgress > div > div {
+    background-color: #FF5733;
+}
+
+/* Input fields styling */
+.stTextInput > div > div > input, 
+.stNumberInput > div > div > input {
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    padding: 0.5rem;
+}
+
+.stTextInput > div > div > input:focus, 
+.stNumberInput > div > div > input:focus {
+    border-color: #FF5733;
+    box-shadow: 0 0 0 2px rgba(255, 87, 51, 0.2);
+}
+
+/* Tabs styling */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 2rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+    height: 3rem;
+    white-space: pre-wrap;
+    background-color: transparent;
+    border-radius: 5px 5px 0 0;
+    color: #555;
+    font-weight: 500;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: rgba(255, 87, 51, 0.1) !important;
+    color: #FF5733 !important;
+    border-bottom: 2px solid #FF5733 !important;
+}
+
+/* Card-like containers */
+.css-1r6slb0 {
+    border-radius: 10px !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Success message styling */
+.element-container .stAlert {
+    border-radius: 5px;
+}
+
+.element-container .stAlert.success {
+    background-color: rgba(115, 237, 193, 0.2);
+    border-left-color: #73EDC1;
+}
+
+.element-container .stAlert.info {
+    background-color: rgba(128, 187, 255, 0.2);
+    border-left-color: #80BBFF;
+}
+
+.element-container .stAlert.warning {
+    background-color: rgba(255, 204, 102, 0.2);
+    border-left-color: #FFCC66;
+}
+
+.element-container .stAlert.error {
+    background-color: rgba(255, 87, 51, 0.2);
+    border-left-color: #FF5733;
+}
+
+/* Table/Dataframe styling */
+[data-testid="stDataFrame"] {
+    border-radius: 10px;
+    border: 1px solid #eee;
+    overflow: hidden;
+}
+
+/* Image container styling */
+[data-testid="stImage"] {
+    transition: transform 0.3s ease;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+[data-testid="stImage"]:hover {
+    transform: scale(1.02);
+}
+
+/* Expander styling */
+.streamlit-expanderHeader {
+    font-weight: 500;
+    color: #555;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+
+.streamlit-expanderHeader:hover {
+    background-color: #f5f5f5;
+}
+
+/* Satellite imagery preview container */
+.satellite-preview {
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    padding: 0.5rem;
+    transition: all 0.3s;
+}
+
+.satellite-preview:hover {
+    border-color: #FF5733;
+    box-shadow: 0 0 10px rgba(255, 87, 51, 0.2);
+}
+
+/* Fire detection highlight */
+.fire-detection {
+    position: relative;
+    overflow: hidden;
+}
+
+.fire-detection::after {
+    content: '🔥';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 24px;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    animation: pulse 2s infinite;
+    z-index: 100;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.5rem;
+        font-size: 0.8rem;
+    }
+}
