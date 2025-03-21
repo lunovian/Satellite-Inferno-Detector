@@ -4,7 +4,6 @@
 /valid
 *.pt
 *.zip
-*.txt
 .env
 .pyc
 *.pyc
