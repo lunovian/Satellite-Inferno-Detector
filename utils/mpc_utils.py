@@ -241,6 +241,7 @@ def search_satellite_imagery(
     collection: str = "sentinel-2-l2a",
     max_cloud_cover: int = 20,
     search_radius_km: float = 10.0,
+    expand_aoi_km: float = 5.0,  # New parameter to expand AOI
 ) -> List[Dict]:
     """
     Search for satellite imagery from MPC
@@ -252,6 +253,7 @@ def search_satellite_imagery(
         collection: Satellite collection ID
         max_cloud_cover: Maximum cloud cover percentage
         search_radius_km: Search radius in kilometers
+        expand_aoi_km: Amount to expand the AOI in kilometers
     """
     try:
         # Validate parameters
@@ -265,13 +267,14 @@ def search_satellite_imagery(
         # Convert radius from km to degrees (approximate)
         degrees_per_km = 1 / 111  # at equator
         search_radius = search_radius_km * degrees_per_km
+        expand_aoi = expand_aoi_km * degrees_per_km
 
-        # Create search area
+        # Create expanded search area
         bbox = [
-            lon - search_radius,
-            lat - search_radius,
-            lon + search_radius,
-            lat + search_radius,
+            lon - search_radius - expand_aoi,
+            lat - search_radius - expand_aoi,
+            lon + search_radius + expand_aoi,
+            lat + search_radius + expand_aoi,
         ]
         bbox = validate_bbox(bbox)
 

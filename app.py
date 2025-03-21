@@ -312,6 +312,11 @@ def render_mpc_section():
         value=20,
     )
 
+    # Add input for expanding AOI
+    expand_aoi_km = st.number_input(
+        "Expand AOI (km)", value=5.0, min_value=0.0, max_value=50.0, step=0.5
+    )
+
     # Search button
     if st.button("Search Satellite Imagery"):
         with st.spinner("Searching for imagery..."):
@@ -323,6 +328,7 @@ def render_mpc_section():
                 date_start.isoformat(),  # Use same date for end
                 collection=selected_collection,
                 max_cloud_cover=max_cloud_cover,
+                expand_aoi_km=expand_aoi_km,  # Pass the expanded AOI parameter
             )
 
             if not items:
