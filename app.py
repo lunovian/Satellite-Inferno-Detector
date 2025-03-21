@@ -1285,7 +1285,6 @@ def main():
 
     with tab1:
         st.header("Upload Images")
-        st.header("Upload Images")
         # Image upload
         uploaded_files = st.file_uploader(
             "Drag and drop image files here",

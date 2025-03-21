@@ -12,3 +12,4 @@
 *.csv
 /images
 *.pyc
+__init__.cpython-312.pyc
