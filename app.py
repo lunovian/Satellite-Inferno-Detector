@@ -15,56 +15,81 @@ import uuid
 import logging as logger
 from typing import Optional, List, Dict, Tuple, Union, Any, Callable
 
-# Add utils to path to ensure imports work correctly
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Better module import handling for cloud deployment
+# Fix path issues for both local and cloud environments
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
-# After existing imports, add:
-try:
-    from utils.mpc_utils import (
-        init_planetary_computer,
-        search_satellite_imagery,
-        process_satellite_image,
-        get_available_collections,
-        create_preview_image,
-    )
-    from utils.image_utils import create_tiled_image, TiledImage, should_tile_image
-    from utils.csv_utils import (
-        validate_wildfire_data,
-        parse_date_column,
-        get_common_date_formats,
-        validate_satellite_dates,
-        detect_numeric_columns,
-        detect_columns,
-        validate_column_selection,
-    )
-except ImportError as e:
-    st.error(f"Import error: {e}")
-    st.info("Attempting local imports...")
-    # Try relative imports as fallback
-    try:
-        import mpc_utils
-        import image_utils
-        import csv_utils
 
-        # Reassign functions to maintain compatibility
-        init_planetary_computer = mpc_utils.init_planetary_computer
-        search_satellite_imagery = mpc_utils.search_satellite_imagery
-        process_satellite_image = mpc_utils.process_satellite_image
-        get_available_collections = mpc_utils.get_available_collections
-        create_preview_image = mpc_utils.create_preview_image
-        create_tiled_image = image_utils.create_tiled_image
-        TiledImage = image_utils.TiledImage
-        should_tile_image = image_utils.should_tile_image
-        validate_wildfire_data = csv_utils.validate_wildfire_data
-        parse_date_column = csv_utils.parse_date_column
-        get_common_date_formats = csv_utils.get_common_date_formats
-        validate_satellite_dates = csv_utils.validate_satellite_dates
-        detect_numeric_columns = csv_utils.detect_numeric_columns
-        detect_columns = csv_utils.detect_columns
-        validate_column_selection = csv_utils.validate_column_selection
-    except ImportError as e2:
-        st.error(f"Failed to import utility modules: {e2}")
-        st.warning("Application may not function correctly due to missing modules")
+# Create a more reliable import mechanism
+def import_utils():
+    """Import utility modules using a more reliable approach"""
+    utils = {}
+
+    # Helper to safely import functions from a module
+    def safe_import(module_name, function_names):
+        try:
+            # Try absolute import first (works in most environments)
+            module = __import__(module_name, fromlist=function_names)
+            return {name: getattr(module, name) for name in function_names}
+        except (ImportError, AttributeError) as e:
+            st.warning(f"Error importing from {module_name}: {e}")
+            return None
+
+    # Import MPC utils
+    mpc_functions = [
+        "init_planetary_computer",
+        "search_satellite_imagery",
+        "process_satellite_image",
+        "get_available_collections",
+        "create_preview_image",
+    ]
+    mpc_utils = safe_import("utils.mpc_utils", mpc_functions)
+    if mpc_utils:
+        utils.update(mpc_utils)
+    else:
+        # Alternate import paths
+        alt_mpc_utils = safe_import("mpc_utils", mpc_functions)
+        if alt_mpc_utils:
+            utils.update(alt_mpc_utils)
+
+    # Import image utils
+    image_functions = ["create_tiled_image", "TiledImage", "should_tile_image"]
+    image_utils = safe_import("utils.image_utils", image_functions)
+    if image_utils:
+        utils.update(image_utils)
+    else:
+        alt_image_utils = safe_import("image_utils", image_functions)
+        if alt_image_utils:
+            utils.update(alt_image_utils)
+
+    # Import CSV utils
+    csv_functions = [
+        "validate_wildfire_data",
+        "parse_date_column",
+        "get_common_date_formats",
+        "validate_satellite_dates",
+        "detect_numeric_columns",
+        "detect_columns",
+        "validate_column_selection",
+    ]
+    csv_utils = safe_import("utils.csv_utils", csv_functions)
+    if csv_utils:
+        utils.update(csv_utils)
+    else:
+        alt_csv_utils = safe_import("csv_utils", csv_functions)
+        if alt_csv_utils:
+            utils.update(alt_csv_utils)
+
+    return utils
+
+
+# Import utility functions
+utils_imports = import_utils()
+
+# Make imported functions available in the global scope
+globals().update(utils_imports)
 
 from datetime import datetime, timedelta
 
