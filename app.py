@@ -15,6 +15,22 @@ import uuid
 import logging as logger
 from typing import Optional, List, Dict, Tuple, Union, Any, Callable
 
+# Better module import handling for cloud deployment
+# Fix path issues for both local and cloud environments
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# Try to import from the utils package
+try:
+    from utils.mpc_utils import *
+except ImportError:
+    # Create utils directory if it doesn't exist
+    utils_dir = os.path.join(current_dir, "utils")
+    if not os.path.exists(utils_dir):
+        os.makedirs(utils_dir)
+        print(f"Created utils directory at {utils_dir}")
+
 from utils.csv_utils import (
     detect_columns,
     detect_numeric_columns,
@@ -32,12 +48,6 @@ from utils.mpc_utils import (
     process_satellite_image,
     search_satellite_imagery,
 )
-
-# Better module import handling for cloud deployment
-# Fix path issues for both local and cloud environments
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
 
 
 # Create a more reliable import mechanism

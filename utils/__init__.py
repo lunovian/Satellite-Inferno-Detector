@@ -4,6 +4,8 @@ This package includes utilities for Microsoft Planetary Computer,
 CSV processing, and image handling.
 """
 
+# This file makes the utils directory a Python package
+
 # Import all utility functions to make them available via utils.*
 try:
     from .mpc_utils import (
