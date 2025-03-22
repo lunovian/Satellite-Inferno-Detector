@@ -8,31 +8,36 @@ matplotlib
 opencv-python
 Pillow
 
-# Deep Learning & YOLO# Deep Learning & YOLO
-torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+# Deep Learning & YOLO
+--index-url https://download.pytorch.org/whl/cu126
+torch
+torchvision
+torchaudio
 ultralytics
 
-# Satellite Image Processing# Satellite Image Processing
+# Satellite Image Processing
 planetary-computer
 pystac-client
 pystac
 rasterio
 pyproj
+odc-stac
+xarray
 
-# Async Processing# Async Processing
+# Async Processing
 nest_asyncio
 aiohttp
 async-timeout
 
-# File Management# File Management
+# File Management
 requests
 python-dateutil
 
-# Progress tracking and UI enhancements# Progress tracking and UI enhancements
+# Progress tracking and UI enhancements
 tqdm
 rich
 
-# Additional utility libraries# Additional utility libraries
+# Additional utility libraries
 scikit-learn
 scipy
 shapely

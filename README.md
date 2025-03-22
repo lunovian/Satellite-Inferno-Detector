@@ -85,6 +85,20 @@ pip install -r requirements.txt
 
 ## Dataset Management
 
+### Pre-trained Dataset
+
+The project uses a curated dataset available on Hugging Face:
+- Dataset: [satellite-inferno-detector-dataset](https://huggingface.co/datasets/lunovian/satellite-inferno-detector-dataset)
+- Contains labeled satellite imagery specifically for wildfire detection
+- Ready to use with the training pipeline
+- Includes validation and test sets
+
+To download the pre-trained dataset:
+
+```bash
+python upload_and_unpack.py download --dataset_name lunovian/satellite-inferno-detector-dataset --local_dir data/pretrained
+```
+
 ### Uploading Datasets to Hugging Face
 
 The repository includes tools for uploading datasets to Hugging Face to facilitate model training and dataset sharing.

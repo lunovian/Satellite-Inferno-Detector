@@ -1,17 +1,7 @@
 [theme]
-primaryColor = "#FF4B4B"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F0F2F6"
-textColor = "#262730"
-font = "sans serif"
-base = "light"
+base = "dark"
 
 [server]
 maxUploadSize = 200
 enableXsrfProtection = false
 enableCORS = false
-
-[runner]
-# This adds the project root to Python's path
-pythonPath = "python"
-magicEnabled = true

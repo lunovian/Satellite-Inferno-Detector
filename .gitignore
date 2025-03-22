@@ -13,3 +13,4 @@
 /images
 *.pyc
 __init__.cpython-312.pyc
+/satellite-inferno-detector.v5i.yolov12
