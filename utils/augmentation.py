@@ -1,352 +1,362 @@
+"""
+Augmentation module for the Satellite Inferno Detector.
+Provides satellite imagery specific augmentations for wildfire detection.
+"""
+
 import os
-import cv2
-import numpy as np
-
-try:
-    import albumentations as A
-except ImportError:
-    print("Installing albumentations...")
-    import subprocess
-
-    subprocess.check_call(["pip", "install", "albumentations"])
-    import albumentations as A
-
-# Print version info to help diagnose issues
-try:
-    print(f"Albumentations version: {A.__version__}")
-except AttributeError:
-    print("Albumentations version information not available")
-
-from pathlib import Path
+import yaml
 import random
+import numpy as np
 import shutil
 from tqdm import tqdm
+from pathlib import Path
+import cv2
 import glob
-import yaml
+import logging
 
-# Import console utilities
 try:
-    from console_utils import (
-        console,
-        print_header,
-        print_success,
-        print_warning,
-        print_error,
-        print_info,
-        print_section,
-        create_progress_bar,
-    )
+    import albumentations as A
+    from albumentations.pytorch import ToTensorV2
 
-    has_rich_console = True
+    ALBUMENTATIONS_AVAILABLE = True
 except ImportError:
-    # If console utilities are not available, use standard print
-    print("Note: Rich console not available, using standard output")
-    console = print
-    print_header = print_success = print_warning = print_error = print_info = (
-        print_section
-    ) = print
-    has_rich_console = False
+    logging.warning(
+        "Albumentations not installed. Please install with: pip install albumentations"
+    )
+    ALBUMENTATIONS_AVAILABLE = False
 
-    def create_progress_bar(*args, **kwargs):
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+
+def get_augmentation_pipeline(input_size=640):
+    """
+    Create an augmentation pipeline using Albumentations.
+
+    Args:
+        input_size: Size for resizing images (default: 640x640)
+
+    Returns:
+        Albumentations transform pipeline
+    """
+    if not ALBUMENTATIONS_AVAILABLE:
+        logging.error(
+            "Cannot create augmentation pipeline: Albumentations not installed"
+        )
         return None
 
-
-class SatelliteFireAugmentation:
-    """
-    Specialized data augmentation for satellite wildfire detection.
-    Handles unique characteristics of satellite imagery and fire patterns.
-    """
-
-    def __init__(self, config=None):
-        """
-        Initialize augmentation pipeline with configuration.
-
-        Args:
-            config: Dictionary of configuration parameters
-        """
-        self.config = config or {}
-        self.input_size = self.config.get("input_size", 640)
-
-        # Define augmentation pipeline specifically for satellite imagery
-        # Using only transformations that are widely available across albumentations versions
-        self.transform = A.Compose(
-            [
-                # Spatial augmentations - basic transformations available in all versions
-                A.RandomRotate90(p=0.5),
-                A.HorizontalFlip(p=0.5),
-                A.VerticalFlip(p=0.3),
-                # Use Affine instead of ShiftScaleRotate as recommended
-                A.Affine(
-                    scale=(0.8, 1.2),  # Scale limit
-                    translate_percent=0.1,  # Shift limit
-                    rotate=(-45, 45),  # Rotate limit
-                    interpolation=cv2.INTER_LINEAR,
-                    mode=cv2.BORDER_CONSTANT,
-                    p=0.5,
-                ),
-                # Satellite imagery specific augmentations
-                A.RandomBrightnessContrast(
-                    brightness_limit=0.2, contrast_limit=0.2, p=0.7
-                ),
-                # Weather/atmospheric condition simulation
-                A.OneOf(
-                    [
-                        A.GaussianBlur(blur_limit=(3, 5), p=1.0),  # Atmospheric blur
-                        A.GaussNoise(
-                            p=1.0
-                        ),  # Fixed: removed incorrect var_limit parameter
-                        A.MultiplicativeNoise(
-                            multiplier=(0.9, 1.1), p=1.0, elementwise=True
-                        ),  # Scattered clouds
-                    ],
-                    p=0.3,
-                ),
-                # Wildfire-specific color adjustments
-                A.OneOf(
-                    [
-                        A.HueSaturationValue(
-                            hue_shift_limit=10,
-                            sat_shift_limit=15,
-                            val_shift_limit=10,
-                            p=1.0,
-                        ),
-                        A.RGBShift(p=1.0),
-                    ],
-                    p=0.5,
-                ),
-                # Fire intensity simulation - using only ToGray which is available in all versions
-                A.ToGray(p=0.2),  # Smoke-covered areas
-                # Preserve aspect ratio while resizing
-                A.LongestMaxSize(max_size=self.input_size, p=1.0),
-                A.PadIfNeeded(
-                    min_height=self.input_size,
-                    min_width=self.input_size,
-                    border_mode=cv2.BORDER_CONSTANT,
-                    p=1.0,
-                ),
-            ],
-            bbox_params=A.BboxParams(
-                format="yolo", min_visibility=0.3, label_fields=["class_labels"]
+    # General augmentations suitable for satellite imagery
+    transform = A.Compose(
+        [
+            # Geometric transformations
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            A.RandomRotate90(p=0.5),
+            A.ShiftScaleRotate(
+                p=0.3, shift_limit=0.0625, scale_limit=0.1, rotate_limit=15
             ),
-        )
+            # Color augmentations
+            A.RandomBrightnessContrast(p=0.5, brightness_limit=0.2, contrast_limit=0.2),
+            A.HueSaturationValue(
+                p=0.3, hue_shift_limit=5, sat_shift_limit=20, val_shift_limit=10
+            ),
+            # Weather and environmental simulations for satellite imagery
+            A.RandomFog(p=0.01, fog_coef_lower=0.1, fog_coef_upper=0.2),
+            A.RandomShadow(p=0.01, shadow_roi=(0, 0, 1, 1)),
+            # Blur augmentations (as specified in your prompt)
+            A.Blur(p=0.01, blur_limit=(3, 7)),
+            A.MedianBlur(p=0.01, blur_limit=(3, 7)),
+            A.ToGray(p=0.01, num_output_channels=3, method="weighted_average"),
+            A.CLAHE(p=0.01, clip_limit=(1.0, 4.0), tile_grid_size=(8, 8)),
+            # Fire-specific augmentations
+            A.ColorJitter(
+                p=0.2,
+                brightness=[0.8, 1.2],
+                contrast=[0.8, 1.2],
+                saturation=[0.8, 1.2],
+                hue=0.2,
+            ),
+            # Resize to target size
+            A.Resize(height=input_size, width=input_size, p=1.0),
+        ],
+        # This will tell albumentations that we're working with bounding box annotations
+        bbox_params=A.BboxParams(format="yolo", label_fields=["class_labels"]),
+    )
 
-        # Fire-specific intensity augmentation - using only core transformations
-        self.fire_intensity_transform = A.Compose(
-            [
-                A.RandomBrightnessContrast(
-                    brightness_limit=(0.1, 0.3),  # Boost brightness for fire regions
-                    contrast_limit=(0.1, 0.3),  # Enhance contrast for fire regions
-                    p=0.8,
-                ),
-                A.HueSaturationValue(
-                    hue_shift_limit=5,  # Preserve fire color range
-                    sat_shift_limit=15,  # Boost saturation for fire visibility
-                    val_shift_limit=15,  # Enhance value for fire intensity
-                    p=0.7,
-                ),
-            ]
-        )
+    return transform
 
-    def augment_dataset(self, dataset_dir, output_dir, augmentation_factor=2):
-        """
-        Augment an entire YOLO dataset with images and labels.
 
-        Args:
-            dataset_dir: Root directory of the dataset with train/val folders
-            output_dir: Output directory for augmented dataset
-            augmentation_factor: Number of augmented samples per original image
-        """
-        print(f"Augmenting dataset from {dataset_dir} to {output_dir}")
+def parse_yolo_label(label_path):
+    """
+    Parse YOLO format labels from a file
 
-        # Create output directories
-        os.makedirs(output_dir, exist_ok=True)
+    Args:
+        label_path: Path to the label file
 
-        # Copy data.yaml if it exists
-        yaml_src = os.path.join(dataset_dir, "data.yaml")
-        if os.path.exists(yaml_src):
-            yaml_dst = os.path.join(output_dir, "data.yaml")
+    Returns:
+        List of bounding boxes in YOLO format (class_id, x_center, y_center, width, height)
+    """
+    bboxes = []
+    if not os.path.exists(label_path):
+        return []
 
-            # Read existing yaml
-            with open(yaml_src, "r") as f:
-                yaml_data = yaml.safe_load(f)
-
-            # Update paths in yaml
-            for key in ["train", "val", "test"]:
-                if key in yaml_data:
-                    # Replace dataset_dir with output_dir in the path
-                    yaml_data[key] = yaml_data[key].replace(dataset_dir, output_dir)
-
-            # Save updated yaml
-            with open(yaml_dst, "w") as f:
-                yaml.dump(yaml_data, f, default_flow_style=False)
-
-            print(f"Updated data.yaml with new paths")
-
-        # Process each split (train, val)
-        for split in ["train", "valid", "test"]:
-            src_img_dir = os.path.join(dataset_dir, split, "images")
-            src_label_dir = os.path.join(dataset_dir, split, "labels")
-
-            # Skip if directory doesn't exist
-            if not os.path.exists(src_img_dir):
-                continue
-
-            dst_img_dir = os.path.join(output_dir, split, "images")
-            dst_label_dir = os.path.join(output_dir, split, "labels")
-
-            os.makedirs(dst_img_dir, exist_ok=True)
-            os.makedirs(dst_label_dir, exist_ok=True)
-
-            # First, copy all original files
-            print(f"Copying original {split} files...")
-            for img_file in glob.glob(os.path.join(src_img_dir, "*")):
-                img_name = os.path.basename(img_file)
-
-                # Copy image
-                shutil.copy2(img_file, os.path.join(dst_img_dir, img_name))
-
-                # Copy corresponding label if it exists
-                base_name = os.path.splitext(img_name)[0]
-                label_file = os.path.join(src_label_dir, base_name + ".txt")
-                if os.path.exists(label_file):
-                    shutil.copy2(
-                        label_file, os.path.join(dst_label_dir, base_name + ".txt")
-                    )
-
-            # Then generate augmented samples
-            if augmentation_factor > 0:
-                print(
-                    f"Generating {augmentation_factor} augmented samples per image for {split}..."
-                )
-                self._augment_split(
-                    src_img_dir,
-                    src_label_dir,
-                    dst_img_dir,
-                    dst_label_dir,
-                    augmentation_factor,
-                )
-
-    def _augment_split(
-        self,
-        src_img_dir,
-        src_label_dir,
-        dst_img_dir,
-        dst_label_dir,
-        augmentation_factor,
-    ):
-        """Augment images and labels for a specific split"""
-        img_files = glob.glob(os.path.join(src_img_dir, "*"))
-
-        for img_file in tqdm(img_files, desc="Augmenting"):
-            img_name = os.path.basename(img_file)
-            base_name = os.path.splitext(img_name)[0]
-            label_file = os.path.join(src_label_dir, base_name + ".txt")
-
-            # Skip if no label file exists
-            if not os.path.exists(label_file):
-                continue
-
-            # Read image and label
-            image = cv2.imread(img_file)
-            if image is None:
-                print(f"Warning: Could not read {img_file}, skipping.")
-                continue
-
-            # Read bbox annotations from YOLO format
-            with open(label_file, "r") as f:
-                lines = f.readlines()
-
-            bboxes = []
-            class_labels = []
-
-            for line in lines:
+    with open(label_path, "r") as f:
+        for line in f:
+            if line.strip():
                 parts = line.strip().split()
-                if len(parts) >= 5:
+                if len(parts) == 5:
                     class_id = int(parts[0])
-                    x_center, y_center, width, height = map(float, parts[1:5])
-                    bboxes.append([x_center, y_center, width, height])
-                    class_labels.append(class_id)
+                    x_center = float(parts[1])
+                    y_center = float(parts[2])
+                    width = float(parts[3])
+                    height = float(parts[4])
+                    bboxes.append([class_id, x_center, y_center, width, height])
+    return bboxes
 
-            # Generate augmented samples
-            for i in range(augmentation_factor):
-                # Apply spatial augmentation to image and bboxes
-                augmented = self.transform(
-                    image=image, bboxes=bboxes, class_labels=class_labels
-                )
 
-                aug_image = augmented["image"]
-                aug_bboxes = augmented["bboxes"]
-                aug_class_labels = augmented["class_labels"]
+def apply_augmentation(image_path, label_path, transform):
+    """
+    Apply augmentation to an image and its labels
 
-                # Create augmented file names
-                aug_img_name = f"{base_name}_aug{i + 1}{os.path.splitext(img_name)[1]}"
-                aug_label_name = f"{base_name}_aug{i + 1}.txt"
+    Args:
+        image_path: Path to the image file
+        label_path: Path to the label file
+        transform: Albumentations transform pipeline
 
-                # Save augmented image
-                cv2.imwrite(os.path.join(dst_img_dir, aug_img_name), aug_image)
+    Returns:
+        Augmented image and bounding boxes
+    """
+    # Read the image
+    image = cv2.imread(image_path)
+    if image is None:
+        logging.warning(f"Could not read image: {image_path}")
+        return None, None
 
-                # Save augmented label
-                with open(os.path.join(dst_label_dir, aug_label_name), "w") as f:
-                    for bbox, class_id in zip(aug_bboxes, aug_class_labels):
-                        x_center, y_center, width, height = bbox
-                        f.write(f"{class_id} {x_center} {y_center} {width} {height}\n")
+    # Convert BGR to RGB
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    # Read bounding boxes
+    yolo_bboxes = parse_yolo_label(label_path)
+    if not yolo_bboxes:
+        # If no bounding boxes, still augment the image
+        aug = transform(image=image, bboxes=[], class_labels=[])
+        return aug["image"], []
+
+    # Extract bounding box coordinates and class labels
+    bboxes = []
+    class_labels = []
+
+    for bbox in yolo_bboxes:
+        class_id, x_center, y_center, width, height = bbox
+        bboxes.append([x_center, y_center, width, height])
+        class_labels.append(class_id)
+
+    # Apply augmentation
+    aug = transform(image=image, bboxes=bboxes, class_labels=class_labels)
+
+    # Format the augmented bounding boxes back to YOLO format
+    aug_bboxes = []
+    for i, bbox in enumerate(aug["bboxes"]):
+        x_center, y_center, width, height = bbox
+        class_id = aug["class_labels"][i]
+        aug_bboxes.append([class_id, x_center, y_center, width, height])
+
+    return aug["image"], aug_bboxes
+
+
+def save_augmented_data(image, bboxes, img_output_path, label_output_path):
+    """
+    Save augmented image and labels
+
+    Args:
+        image: Augmented image (RGB format)
+        bboxes: Augmented bounding boxes in YOLO format
+        img_output_path: Path to save the augmented image
+        label_output_path: Path to save the augmented labels
+    """
+    # Ensure the output directory exists
+    os.makedirs(os.path.dirname(img_output_path), exist_ok=True)
+    os.makedirs(os.path.dirname(label_output_path), exist_ok=True)
+
+    # Convert RGB to BGR for saving with OpenCV
+    image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    cv2.imwrite(img_output_path, image_bgr)
+
+    # Save the bounding boxes
+    with open(label_output_path, "w") as f:
+        for bbox in bboxes:
+            class_id, x_center, y_center, width, height = bbox
+            f.write(f"{int(class_id)} {x_center} {y_center} {width} {height}\n")
 
 
 def create_augmented_dataset(
     source_dir, output_dir, augmentation_factor=3, input_size=640
 ):
     """
-    Create an augmented dataset ready for YOLO training
+    Create an augmented dataset based on the source dataset
 
     Args:
-        source_dir: Source dataset directory
-        output_dir: Output directory for augmented dataset
-        augmentation_factor: Number of augmentations per image
-        input_size: Image size for resizing
+        source_dir: Path to the source dataset directory
+        output_dir: Path to save the augmented dataset
+        augmentation_factor: Number of augmented samples to generate per original sample
+        input_size: Size for resizing images
+
+    Returns:
+        Path to the augmented dataset's data.yaml file
     """
-    print_header("Satellite Fire Image Augmentation")
-    print_info(f"Source directory: {source_dir}")
-    print_info(f"Output directory: {output_dir}")
-    print_info(f"Augmentation factor: {augmentation_factor}x")
-    print_info(f"Image size: {input_size}px")
+    if not ALBUMENTATIONS_AVAILABLE:
+        logging.error(
+            "Augmentation requires Albumentations. Install with: pip install albumentations"
+        )
+        return None
 
-    config = {
-        "input_size": input_size,
-    }
+    logging.info(f"Creating augmented dataset from {source_dir} to {output_dir}")
+    logging.info(f"Augmentation factor: {augmentation_factor}")
 
-    augmenter = SatelliteFireAugmentation(config)
-    augmenter.augment_dataset(
-        dataset_dir=source_dir,
-        output_dir=output_dir,
-        augmentation_factor=augmentation_factor,
-    )
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
 
-    print_success(f"Augmentation complete. Augmented dataset created at {output_dir}")
+    # Find the data.yaml file
+    data_yaml_path = os.path.join(source_dir, "data.yaml")
+    if not os.path.exists(data_yaml_path):
+        logging.error(f"data.yaml not found at {data_yaml_path}")
+        return None
 
+    # Read the data.yaml file
+    with open(data_yaml_path, "r") as f:
+        data_config = yaml.safe_load(f)
 
-if __name__ == "__main__":
-    import argparse
+    # Create augmentation pipeline
+    transform = get_augmentation_pipeline(input_size=input_size)
+    if transform is None:
+        return None
 
-    parser = argparse.ArgumentParser(
-        description="Create augmented satellite wildfire dataset"
-    )
-    parser.add_argument(
-        "--source", type=str, required=True, help="Source dataset directory"
-    )
-    parser.add_argument("--output", type=str, required=True, help="Output directory")
-    parser.add_argument(
-        "--factor",
-        type=int,
-        default=3,
-        help="Augmentation factor (new samples per image)",
-    )
-    parser.add_argument("--size", type=int, default=640, help="Input image size")
+    # Process each dataset split (train, valid, test)
+    for split in ["train", "val", "test"]:
+        # Handle different keys in data.yaml ('val' vs 'valid')
+        yaml_key = split
+        if split == "val" and "valid" in data_config:
+            yaml_key = "valid"
+        elif split == "valid" and "val" in data_config:
+            yaml_key = "val"
 
-    args = parser.parse_args()
+        if yaml_key not in data_config:
+            logging.warning(f"Split '{yaml_key}' not found in data.yaml")
+            continue
 
-    create_augmented_dataset(
-        source_dir=args.source,
-        output_dir=args.output,
-        augmentation_factor=args.factor,
-        input_size=args.size,
-    )
+        # Get the split directory
+        split_dir = data_config[yaml_key]
+        if not os.path.isabs(split_dir):
+            split_dir = os.path.join(source_dir, split_dir)
+
+        # Output directories
+        output_imgs_dir = os.path.join(output_dir, split, "images")
+        output_labels_dir = os.path.join(output_dir, split, "labels")
+        os.makedirs(output_imgs_dir, exist_ok=True)
+        os.makedirs(output_labels_dir, exist_ok=True)
+
+        # Find all images
+        img_extensions = [".jpg", ".jpeg", ".png", ".bmp"]
+        img_files = []
+        for ext in img_extensions:
+            img_files.extend(
+                glob.glob(os.path.join(split_dir, f"**/*{ext}"), recursive=True)
+            )
+            img_files.extend(
+                glob.glob(os.path.join(split_dir, f"**/*{ext.upper()}"), recursive=True)
+            )
+
+        logging.info(f"Found {len(img_files)} images in {split_dir}")
+
+        # For test split, just copy the data
+        if split == "test":
+            logging.info(f"Copying test data without augmentation")
+            for img_path in tqdm(img_files, desc=f"Copying test data"):
+                # Get corresponding label path
+                label_path = (
+                    img_path.replace("images", "labels").rsplit(".", 1)[0] + ".txt"
+                )
+
+                # Output paths
+                img_output_path = os.path.join(
+                    output_imgs_dir, os.path.basename(img_path)
+                )
+                label_output_path = os.path.join(
+                    output_labels_dir, os.path.basename(label_path)
+                )
+
+                # Copy files
+                shutil.copy2(img_path, img_output_path)
+                if os.path.exists(label_path):
+                    shutil.copy2(label_path, label_output_path)
+
+            continue
+
+        # Process train and validation splits with augmentation
+        logging.info(f"Augmenting {split} data")
+        for img_idx, img_path in enumerate(
+            tqdm(img_files, desc=f"Augmenting {split} data")
+        ):
+            # Get the corresponding label path
+            label_path = img_path.replace("images", "labels").rsplit(".", 1)[0] + ".txt"
+
+            # Copy the original image and label
+            img_output_path = os.path.join(output_imgs_dir, os.path.basename(img_path))
+            label_output_path = os.path.join(
+                output_labels_dir, os.path.basename(label_path)
+            )
+
+            shutil.copy2(img_path, img_output_path)
+            if os.path.exists(label_path):
+                shutil.copy2(label_path, label_output_path)
+
+            # Only augment training data
+            if split != "test":
+                # Create augmented versions
+                for aug_idx in range(augmentation_factor):
+                    # Generate augmented filename
+                    base_name = os.path.basename(img_path).rsplit(".", 1)[0]
+                    ext = os.path.basename(img_path).rsplit(".", 1)[1]
+                    aug_img_name = f"{base_name}_aug{aug_idx}.{ext}"
+                    aug_label_name = f"{base_name}_aug{aug_idx}.txt"
+
+                    # Output paths for augmented files
+                    aug_img_path = os.path.join(output_imgs_dir, aug_img_name)
+                    aug_label_path = os.path.join(output_labels_dir, aug_label_name)
+
+                    # Apply augmentation
+                    aug_image, aug_bboxes = apply_augmentation(
+                        img_path, label_path, transform
+                    )
+
+                    if aug_image is not None:
+                        # Save augmented data
+                        save_augmented_data(
+                            aug_image, aug_bboxes, aug_img_path, aug_label_path
+                        )
+
+    # Create the new data.yaml
+    output_yaml_path = os.path.join(output_dir, "data.yaml")
+
+    # Update the paths in data.yaml
+    new_data_config = data_config.copy()
+    new_data_config["train"] = os.path.join("train", "images")
+
+    # Handle val/valid key in the same way as the original
+    if "val" in data_config:
+        new_data_config["val"] = os.path.join("val", "images")
+    if "valid" in data_config:
+        new_data_config["valid"] = os.path.join("valid", "images")
+
+    new_data_config["test"] = os.path.join("test", "images")
+
+    # Write the new data.yaml
+    with open(output_yaml_path, "w") as f:
+        yaml.dump(new_data_config, f, default_flow_style=False)
+
+    logging.info(f"Augmented dataset created at {output_dir}")
+    logging.info(f"Data configuration saved to {output_yaml_path}")
+
+    return output_yaml_path

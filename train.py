@@ -45,7 +45,7 @@ except ImportError:
 
 # Ensure the augmentation module is available
 try:
-    from augmentation import create_augmented_dataset
+    from utils.augmentation import create_augmented_dataset
 
     AUGMENTATION_AVAILABLE = True
 except ImportError:

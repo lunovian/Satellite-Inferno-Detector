@@ -15,8 +15,6 @@ try:
         process_satellite_image,
         get_available_collections,
         create_preview_image,
-        setup_mpc,
-        process_satellite_data,
     )
 
     from .image_utils import (
@@ -42,8 +40,6 @@ try:
         "process_satellite_image",
         "get_available_collections",
         "create_preview_image",
-        "setup_mpc",
-        "process_satellite_data",
         # Image utils
         "create_tiled_image",
         "should_tile_image",
