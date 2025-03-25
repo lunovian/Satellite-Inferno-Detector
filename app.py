@@ -4,6 +4,7 @@ import base64
 from PIL import Image
 import cv2
 import numpy as np
+from model import debug_log
 import streamlit as st
 import tempfile
 import pandas as pd
@@ -157,11 +158,37 @@ if "tiled_images" not in st.session_state:
     st.session_state.tiled_images = {}
 
 
-# Helper to get available models
-def get_available_models():
+# Modified helper to get available models from both primary and backup directories
+def get_available_models(include_backup=False):
+    models = []
+    # Check primary models directory
     if os.path.exists(MODELS_DIR):
-        return [f for f in os.listdir(MODELS_DIR) if f.endswith(".pt")]
-    return []
+        models = [f for f in os.listdir(MODELS_DIR) if f.endswith(".pt")]
+
+    # Check backup models directory if requested
+    if include_backup:
+        BACKUP_MODELS_DIR = "backup_models"
+        if os.path.exists(BACKUP_MODELS_DIR):
+            backup_models = [
+                f for f in os.listdir(BACKUP_MODELS_DIR) if f.endswith(".pt")
+            ]
+            if backup_models:
+                # Add a prefix to identify backup models
+                models.extend([f"[BACKUP] {f}" for f in backup_models])
+
+    return models
+
+
+# Helper to determine actual model path based on model name
+def get_model_path(model_name):
+    # Check if this is a backup model
+    if model_name.startswith("[BACKUP] "):
+        # Extract the actual filename and get it from backup folder
+        actual_name = model_name.replace("[BACKUP] ", "")
+        return os.path.join("backup_models", actual_name)
+    else:
+        # Regular model from primary folder
+        return os.path.join(MODELS_DIR, model_name)
 
 
 # Helper to detect YOLO version from filename
@@ -202,6 +229,13 @@ def process_image(image_path, ensemble, models_to_use):
         if img is None:
             return {"error": "Could not read image file"}
 
+        # Verify that model_names is properly populated
+        if len(ensemble.model_names) < len(ensemble.models):
+            debug_log("Fixing model_names length mismatch")
+            # Add missing model names
+            while len(ensemble.model_names) < len(ensemble.models):
+                ensemble.model_names.append(f"Model-{len(ensemble.model_names)}")
+
         # Get predictions
         predictions = ensemble.predict(image_path, visualize=False)
 
@@ -215,10 +249,13 @@ def process_image(image_path, ensemble, models_to_use):
         pred_details = []
         for pred in predictions:
             model_idx = pred["model_idx"]
-            if model_idx < len(models_to_use):
+            # Safely get the model name (even if model_idx is out of range)
+            if "model_name" in pred:
+                model_name = pred["model_name"]
+            elif model_idx < len(models_to_use):
                 model_name = os.path.basename(models_to_use[model_idx])
             else:
-                model_name = f"Model {model_idx + 1}"
+                model_name = f"Model-{model_idx}"
 
             pred_details.append(
                 {
@@ -1110,6 +1147,60 @@ def process_uploaded_files(uploaded_files):
                 st.session_state.uploaded_images.append((file_path, uploaded_file.name))
 
 
+# Add this function to initialize YOLO ensemble with models from both directories
+def initialize_ensemble(selected_models, conf_threshold=0.3, iou_threshold=0.5):
+    """Initialize YOLO ensemble with selected models from both directories"""
+    try:
+        # Create new ensemble with empty models list
+        ensemble = YOLOEnsemble(
+            models_dir=None,  # Don't load models automatically
+            conf_thres=conf_threshold,
+            iou_thres=iou_threshold,
+        )
+
+        # Manually load each selected model
+        for model_name in selected_models:
+            model_path = get_model_path(model_name)
+            try:
+                debug_log(f"Loading model: {model_path}")
+                model = YOLO(model_path)
+
+                # Extract YOLO version from the model name without backup prefix
+                clean_name = model_name.replace("[BACKUP] ", "")
+                version_name = ensemble._extract_yolo_version(clean_name)
+
+                # Add to ensemble
+                ensemble.models.append(model)
+                ensemble.model_names.append(version_name)
+                debug_log(f"Successfully loaded {model_name} as {version_name}")
+
+            except Exception as e:
+                logger.error(f"Failed to load model {model_name}: {e}")
+                st.warning(f"Failed to load model {model_name}: {e}")
+
+        if not ensemble.models:
+            st.error("No models were successfully loaded")
+            return None
+
+        # Verify model_names length
+        if len(ensemble.model_names) < len(ensemble.models):
+            # Fix model_names length to match models length
+            while len(ensemble.model_names) < len(ensemble.models):
+                idx = len(ensemble.model_names)
+                ensemble.model_names.append(f"Model-{idx}")
+
+        # Log model names for debugging
+        for i, (model, name) in enumerate(zip(ensemble.models, ensemble.model_names)):
+            debug_log(f"Model {i}: {name}")
+
+        return ensemble
+
+    except Exception as e:
+        logger.error(f"Error initializing YOLO ensemble: {e}")
+        st.error(f"Failed to initialize fire detection: {str(e)}")
+        return None
+
+
 # Main application function
 def main():
     # Application header
@@ -1125,10 +1216,16 @@ def main():
     # Sidebar - Model Selection Section
     st.sidebar.title("Model Selection")
 
-    # Get available models
-    # Add error handling for model loading
+    # Add toggle for backup models
+    include_backup_models = st.sidebar.checkbox(
+        "Include Backup Models",
+        value=False,
+        help="Enable to also show models from backup_models directory",
+    )
+
+    # Get available models with backup option
     try:
-        available_models = get_available_models()
+        available_models = get_available_models(include_backup=include_backup_models)
         if not available_models:
             st.sidebar.error(
                 "No YOLO models found! Place .pt files in the 'models' directory."
@@ -1141,22 +1238,30 @@ def main():
         st.error("Error accessing the models directory. Please check permissions.")
         return
 
-    if not available_models:
-        st.sidebar.error(
-            "No YOLO models found! Place .pt files in the 'models' directory."
-        )
-        st.stop()
+    # Display model sources
+    primary_count = len([m for m in available_models if not m.startswith("[BACKUP]")])
+    backup_count = len([m for m in available_models if m.startswith("[BACKUP]")])
 
-    # Model information
-    st.sidebar.success(f"{len(available_models)} Models Available")
+    # Create model source info text
+    model_source_text = f"{primary_count} Primary Models Available"
+    if include_backup_models:
+        model_source_text += f" | {backup_count} Backup Models Available"
+
+    st.sidebar.success(model_source_text)
 
     # Create model selection with metadata
     model_options = []
     model_metadata = []
 
     for model in available_models:
-        version = detect_yolo_version(model)
-        size = detect_model_size(model)
+        # For backup models, get the actual model name without the prefix
+        display_name = model
+        actual_name = (
+            model.replace("[BACKUP] ", "") if model.startswith("[BACKUP] ") else model
+        )
+
+        version = detect_yolo_version(actual_name)
+        size = detect_model_size(actual_name)
 
         # Format version display
         versionLabel = (
@@ -1320,24 +1425,28 @@ def main():
                     progress_text = st.empty()
                     progress_bar = st.progress(0)
 
-                    # Initialize YOLO ensemble
+                    # Initialize YOLO ensemble with models from both directories
                     with st.spinner("Initializing detection models..."):
-                        ensemble = ensure_yolo_ensemble()
+                        ensemble = initialize_ensemble(
+                            st.session_state.selected_models,
+                            conf_threshold=conf_threshold,
+                            iou_threshold=iou_threshold,
+                        )
+
                         if not ensemble:
                             st.error("Failed to initialize detection models")
                             return
 
-                        # Update ensemble parameters from sidebar
-                        ensemble.conf_thres = conf_threshold
-                        ensemble.iou_thres = iou_threshold
+                    # Store in session state
+                    st.session_state.ensemble = ensemble
 
                     # Prepare for detection
                     total_images = len(st.session_state.uploaded_images)
                     processed_results = []
 
-                    # Create model paths
+                    # Get model paths for each selected model
                     models_to_use = [
-                        os.path.join(MODELS_DIR, model)
+                        get_model_path(model)
                         for model in st.session_state.selected_models
                     ]
 
